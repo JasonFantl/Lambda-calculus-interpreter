@@ -22,10 +22,10 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 	t, err := l.nextToken()
 	for err == nil && t.Type != EOF {
 		// ignore illegal tokens
-		if t.Type != ILLEGAL {
-			tokens = append(tokens, t)
-		} else {
+		if t.Type == ILLEGAL {
 			fmt.Printf("illegal token:\n\t%s\t%*s\n", string(l.input), t.Position+1, "^")
+		} else {
+			tokens = append(tokens, t)
 		}
 		t, err = l.nextToken()
 	}
@@ -42,6 +42,10 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 
 func (l *Lexer) nextRune() (rune, bool) {
 	l.position++
+	return l.currentRune()
+}
+
+func (l *Lexer) currentRune() (rune, bool) {
 	if l.position < len(l.input) {
 		return l.input[l.position], false
 	}
@@ -58,7 +62,7 @@ func (l *Lexer) nextToken() (Token, error) {
 		r, eof = l.nextRune()
 	}
 
-	token := Token{EOF, 0, l.position}
+	token := Token{EOF, "", l.position}
 	if eof {
 		return token, nil
 	}
@@ -75,13 +79,23 @@ func (l *Lexer) nextToken() (Token, error) {
 	case '\n':
 		token.Type = NEWLINE
 	default:
-		if isVar(r) {
+		if beginVar(r) {
 			token.Type = VAR
-			token.Literal = r
+			token.Literal = l.lexVar()
 		} else {
 			token.Type = ILLEGAL
 		}
 	}
 
 	return token, nil
+}
+
+func (l *Lexer) lexVar() string {
+	s := ""
+	for r, eof := l.currentRune(); inVar(r) && !eof; {
+		s += string(r)
+		r, eof = l.nextRune()
+	}
+
+	return s
 }

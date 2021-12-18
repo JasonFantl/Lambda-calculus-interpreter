@@ -37,6 +37,7 @@ func main() {
 
 		if err != nil {
 			fmt.Println(err)
+			fmt.Println(tree)
 		} else {
 			fmt.Println(tokens)
 			fmt.Println(tree)

@@ -16,7 +16,6 @@ variable names will be lowercase
     | ( <lexp> <lexp> )
 
 ## Later:
-word variables
 read from file
 use precedence to remove unneeded pranthesis
 named functions

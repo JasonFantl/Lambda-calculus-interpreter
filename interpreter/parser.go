@@ -28,10 +28,10 @@ func (p *Parser) nextToken() Token {
 }
 
 func (p *Parser) currentToken() Token {
-	if p.position >= len(p.tokens) {
-		return p.tokens[len(p.tokens)-1] // return last token EOF
+	if p.position < len(p.tokens) {
+		return p.tokens[p.position]
 	}
-	return p.tokens[p.position]
+	return p.tokens[len(p.tokens)-1] // return last token EOF
 }
 
 func (p *Parser) ParseProgram() (ProgramNode, error) {

@@ -4,8 +4,8 @@ type TokenType string
 
 type Token struct {
 	Type     TokenType
-	Literal  rune // for storing vars
-	Position int  // char index
+	Literal  string // for storing vars
+	Position int    // char index
 }
 
 const (
@@ -26,6 +26,11 @@ func isWhitespace(r rune) bool {
 }
 
 // later will want to read chars to check for words (pg 16-17).
-func isVar(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+func beginVar(r rune) bool {
+	return r >= 'a' && r <= 'z'
+}
+
+// allow lowercase, numbers, underscores, and primes
+func inVar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '\''
 }

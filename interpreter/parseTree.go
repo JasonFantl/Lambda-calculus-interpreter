@@ -19,7 +19,7 @@ func (n ProgramNode) String() string {
 }
 
 type VarNode struct {
-	identifier rune
+	identifier string
 }
 
 func (n VarNode) String() string {
