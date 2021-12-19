@@ -54,7 +54,6 @@ func (l *Lexer) currentRune() (rune, bool) {
 
 func (l *Lexer) nextToken() (Token, error) {
 
-	// since every token is a rune, no need to keep track of words (yet)
 	r, eof := l.nextRune()
 
 	// handle whitespace (maybe use later?)
@@ -72,6 +71,8 @@ func (l *Lexer) nextToken() (Token, error) {
 		token.Type = LAMBDA
 	case '.':
 		token.Type = PERIOD
+	case '=':
+		token.Type = EQUALS
 	case '(':
 		token.Type = LPAREN
 	case ')':
@@ -82,6 +83,9 @@ func (l *Lexer) nextToken() (Token, error) {
 		if beginVar(r) {
 			token.Type = VAR
 			token.Literal = l.lexVar()
+		} else if beginFName(r) {
+			token.Type = FNAME
+			token.Literal = l.lexFName()
 		} else {
 			token.Type = ILLEGAL
 		}
@@ -96,6 +100,18 @@ func (l *Lexer) lexVar() string {
 		s += string(r)
 		r, eof = l.nextRune()
 	}
+	l.position-- // we overshot by a rune to check
+
+	return s
+}
+
+func (l *Lexer) lexFName() string {
+	s := ""
+	for r, eof := l.currentRune(); inFName(r) && !eof; {
+		s += string(r)
+		r, eof = l.nextRune()
+	}
+	l.position-- // we overshot by a rune to check
 
 	return s
 }

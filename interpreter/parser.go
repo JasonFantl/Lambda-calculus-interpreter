@@ -39,11 +39,30 @@ func (p *Parser) ParseProgram() (ProgramNode, error) {
 
 	for token := p.currentToken(); token.Type != EOF; token = p.nextToken() {
 
-		expression, err := p.ParseExpression()
-		if err != nil {
-			return program, err
+		// ignore all NEWLINEs before an expression
+		if token.Type == NEWLINE {
+			continue
 		}
-		program.nodes = append(program.nodes, expression)
+
+		// if FNAME, try def, otherwise go to exp to try call. FIX THIS
+		savedTokenIndex := p.position
+		wasFuncDef := false
+		if token.Type == FNAME {
+			namedFunctionDefNode, err := p.ParseNamedFunctionDef()
+			if err == nil { // was a func def!
+				program.nodes = append(program.nodes, namedFunctionDefNode)
+				wasFuncDef = true
+			}
+		}
+
+		if !wasFuncDef {
+			p.position = savedTokenIndex // in case of failed func def parse
+			expression, err := p.ParseExpression()
+			if err != nil {
+				return program, err
+			}
+			program.nodes = append(program.nodes, expression)
+		}
 
 		token = p.nextToken()
 		if token.Type != NEWLINE && token.Type != EOF {
@@ -58,19 +77,7 @@ func (p *Parser) ParseExpression() (Node, error) {
 	token := p.currentToken()
 
 	if token.Type == VAR {
-		varNode, err := p.ParseVar()
-		if err != nil {
-			return varNode, err
-		}
-		return varNode, nil
-	}
-
-	if token.Type == LPAREN {
-		applicationNode, err := p.ParseApplication()
-		if err != nil {
-			return applicationNode, err
-		}
-		return applicationNode, nil
+		return VarNode{token.Literal}, nil
 	}
 
 	if token.Type == LAMBDA {
@@ -81,51 +88,105 @@ func (p *Parser) ParseExpression() (Node, error) {
 		return funcNode, nil
 	}
 
-	return ProgramNode{}, fmt.Errorf("expression parser expected LAMBDA, APPLICATION, or VAR, got %s at %d", token.Type, token.Position)
-}
+	if token.Type == LPAREN { // could be three different things
+		token = p.nextToken()
+		if token.Type == FNAME { // parse function call
+			// back up token position since parser requires a starting LPAREN
+			p.position--
+			fCallNode, err := p.ParseNamedFunctionCall()
+			if err != nil {
+				return fCallNode, err
+			}
+			return fCallNode, nil
+		} else { // narrowed down to two
+			// parse the (first?) expression
+			expression1, err := p.ParseExpression()
+			if err != nil {
+				return ProgramNode{}, err
+			}
 
-func (p *Parser) ParseVar() (VarNode, error) {
-	varNode := VarNode{}
+			token = p.nextToken()
+			if token.Type == RPAREN { // determined single var
+				return expression1, nil
+			} else { // must be application
+				expression2, err := p.ParseExpression()
+				if err != nil {
+					return ProgramNode{}, err
+				}
 
-	token := p.currentToken()
+				token = p.nextToken()
+				if token.Type != RPAREN {
+					return ProgramNode{}, fmt.Errorf("application parser excpected RPAREN, got %s at %d", token.Type, token.Position)
+				}
 
-	if token.Type != VAR {
-		return varNode, fmt.Errorf("var parser excpected VAR, got %s at %d", token.Type, token.Position)
+				return ApplicationNode{expression1, expression2}, nil
+			}
+		}
 	}
 
-	varNode.identifier = token.Literal
-
-	return varNode, nil
+	return ProgramNode{}, fmt.Errorf("expression parser expected LAMBDA, APPLICATION, FNAME, or VAR, got %s at %d", token.Type, token.Position)
 }
 
-func (p *Parser) ParseApplication() (ApplicationNode, error) {
-	applicationNode := ApplicationNode{}
+func (p *Parser) ParseNamedFunctionDef() (NamedFunctionDefNode, error) {
+	namedFunctionDefNode := NamedFunctionDefNode{}
 
 	token := p.currentToken()
-	if token.Type != LPAREN {
-		return applicationNode, fmt.Errorf("application parser excpected LPAREN, got %s at %d", token.Type, token.Position)
+	if token.Type != FNAME {
+		return namedFunctionDefNode, fmt.Errorf("named function def parser excpected FNAME, got %s at %d", token.Type, token.Position)
+	} else {
+		namedFunctionDefNode.identifier = token.Literal
+	}
+
+	// now capture the rest
+	for token = p.nextToken(); token.Type == VAR; token = p.nextToken() {
+		namedFunctionDefNode.inputs = append(namedFunctionDefNode.inputs, VarNode{token.Literal})
+	}
+
+	// token = p.nextToken() // we overshot in last check, next token already loaded
+	if token.Type != EQUALS {
+		return namedFunctionDefNode, fmt.Errorf("named function def parser excpected EQUALS, got %s at %d", token.Type, token.Position)
 	}
 
 	token = p.nextToken()
 	expression, err := p.ParseExpression()
 	if err != nil {
-		return applicationNode, err
+		return namedFunctionDefNode, err
 	}
-	applicationNode.lExp = expression
+	namedFunctionDefNode.body = expression
+
+	return namedFunctionDefNode, nil
+}
+
+func (p *Parser) ParseNamedFunctionCall() (NamedFunctionCallNode, error) {
+	namedFunctionCallNode := NamedFunctionCallNode{}
+
+	token := p.currentToken()
+	if token.Type != LPAREN {
+		return namedFunctionCallNode, fmt.Errorf("named function call parser excpected LPAREN, got %s at %d", token.Type, token.Position)
+	}
 
 	token = p.nextToken()
-	expression, err = p.ParseExpression()
-	if err != nil {
-		return applicationNode, err
+	if token.Type != FNAME {
+		return namedFunctionCallNode, fmt.Errorf("named function call parser excpected FNAME, got %s at %d", token.Type, token.Position)
 	}
-	applicationNode.rExp = expression
+	namedFunctionCallNode.identifier = token.Literal
 
-	token = p.nextToken()
+	// capture all the EXP
+	for token = p.nextToken(); token.Type != RPAREN; token = p.nextToken() {
+		expression, err := p.ParseExpression()
+		if err != nil {
+			return namedFunctionCallNode, err
+		}
+
+		namedFunctionCallNode.inputs = append(namedFunctionCallNode.inputs, expression)
+	}
+
+	// token = p.nextToken() // we overshot in last check, next token already loaded
 	if token.Type != RPAREN {
-		return applicationNode, fmt.Errorf("application parser excpected RPAREN, got %s at %d", token.Type, token.Position)
+		return namedFunctionCallNode, fmt.Errorf("named function call parser excpected RPAREN, got %s at %d", token.Type, token.Position)
 	}
 
-	return applicationNode, nil
+	return namedFunctionCallNode, nil
 }
 
 func (p *Parser) ParseFunction() (FunctionNode, error) {
@@ -140,11 +201,7 @@ func (p *Parser) ParseFunction() (FunctionNode, error) {
 	if token.Type != VAR {
 		return functionNode, fmt.Errorf("function parser excpected VAR, got %s at %d", token.Type, token.Position)
 	} else {
-		varNode, err := p.ParseVar()
-		if err != nil {
-			return functionNode, err
-		}
-		functionNode.input = varNode
+		functionNode.input = VarNode{token.Literal}
 	}
 
 	token = p.nextToken()

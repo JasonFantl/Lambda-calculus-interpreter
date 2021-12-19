@@ -6,18 +6,20 @@ Function names will be capatalized
 variable names will be lowercase
 
 
-## First pass of grammar:
+## Grammar:
 
-<var> ::= a single letter
+<program> ::= [these are seperated by new lines]
+    | <fname> [<var> <var >...] = <exp>
+    | <exp>
 
-<lexp> ::=
+<exp> ::=
     | <var>
-    | \<var> . <lexp>
-    | ( <lexp> <lexp> )
+    | \<var> . <exp>
+    | ( <exp> )
+    | ( <exp> <exp> )
+    | ( <fname> [<exp> <exp> ...] )
 
 ## Later:
-read from file
 use precedence to remove unneeded pranthesis
-named functions
 alpha transform (is this needed?)
 beta reduction
