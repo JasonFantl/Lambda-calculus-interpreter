@@ -9,4 +9,6 @@ x \f . y u d
 \ x . x z \y. x y
 (\ x.x z) \ y.w \ w.w x y z
 
-\ x y z . x x \ y . \ f . a
+\ xxx y_h' zt . x x \ y . \ f . a
+def A \x . x
+def B \x y . y F True

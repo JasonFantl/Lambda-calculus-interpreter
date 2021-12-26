@@ -52,6 +52,15 @@ func (l *Lexer) currentRune() (rune, bool) {
 	return 0, true
 }
 
+var tokenLookup = map[string]TokenType{
+	"\\":  LAMBDA_TOKEN,
+	".":   PERIOD_TOKEN,
+	"(":   LPAREN_TOKEN,
+	")":   RPAREN_TOKEN,
+	"\n":  NEWLINE_TOKEN,
+	"def": DEF_TOKEN,
+}
+
 func (l *Lexer) nextToken() (Token, error) {
 
 	r, eof := l.nextRune()
@@ -66,37 +75,32 @@ func (l *Lexer) nextToken() (Token, error) {
 		return token, nil
 	}
 
-	switch r {
-	case '\\':
-		token.Type = LAMBDA_TOKEN
-	case '.':
-		token.Type = PERIOD_TOKEN
-	case '=':
-		token.Type = EQUALS_TOKEN
-	case '(':
-		token.Type = LPAREN_TOKEN
-	case ')':
-		token.Type = RPAREN_TOKEN
-	case '\n':
-		token.Type = NEWLINE_TOKEN
-	default:
-		if beginVar(r) {
+	if val, ok := tokenLookup[string(r)]; ok {
+		token.Type = val
+	} else {
+		word := l.lexWord()
+
+		// check keywords
+		if val, ok := tokenLookup[word]; ok {
+			token.Type = val
+		} else if isVar(word) {
 			token.Type = VAR_TOKEN
-			token.Literal = l.lexVar()
-		} else if beginFName(r) {
-			token.Type = FNAME_TOKEN
-			token.Literal = l.lexFName()
+			token.Literal = word
+		} else if isName(word) {
+			token.Type = NAME_TOKEN
+			token.Literal = word
 		} else {
-			token.Type = ILLEGAL_TOKEN
+			// invalid char
+			return token, fmt.Errorf("illegal character '%s' at %d", r, token.Position)
 		}
 	}
 
 	return token, nil
 }
 
-func (l *Lexer) lexVar() string {
+func (l *Lexer) lexWord() string {
 	s := ""
-	for r, eof := l.currentRune(); inVar(r) && !eof; {
+	for r, eof := l.currentRune(); inWord(r) && !eof; {
 		s += string(r)
 		r, eof = l.nextRune()
 	}
@@ -105,13 +109,46 @@ func (l *Lexer) lexVar() string {
 	return s
 }
 
-func (l *Lexer) lexFName() string {
-	s := ""
-	for r, eof := l.currentRune(); inFName(r) && !eof; {
-		s += string(r)
-		r, eof = l.nextRune()
+// var begin with lowercase letter
+func isVar(s string) bool {
+	// check first rune
+	b := s[0]
+	if !(b >= 'a' && b <= 'z') {
+		return false
 	}
-	l.position-- // we overshot by a rune to check
+	// check following runes
+	for _, r := range s {
+		if !inWord(r) {
+			return false
+		}
+	}
+	return true
+}
 
-	return s
+// names begin with uppercase letter
+func isName(s string) bool {
+	// check first rune
+	b := s[0]
+	if !(b >= 'A' && b <= 'Z') {
+		return false
+	}
+	// check following runes
+	for _, r := range s {
+		if !inWord(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isWhitespace(r rune) bool {
+	return r == ' ' || r == '\t' || r == '\r'
+}
+
+func inWord(r rune) bool {
+	return (r >= 'a' && r <= 'z') ||
+		(r >= 'A' && r <= 'Z') ||
+		(r >= '0' && r <= '9') ||
+		r == '_' ||
+		r == '\''
 }

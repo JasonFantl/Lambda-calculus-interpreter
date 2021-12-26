@@ -44,13 +44,21 @@ func (p *Parser) ParseProgram() (ProgramNode, error) {
 		// ignore all NEWLINEs before an expression
 		if token.Type == NEWLINE_TOKEN {
 			continue
+		} else if token.Type == DEF_TOKEN {
+			namedFunctionNode, err := p.ParseNamedFunction()
+			if err != nil {
+				return program, fmt.Errorf("program parser -> %s", err)
+			}
+			program.nodes = append(program.nodes, namedFunctionNode)
+		} else if ok := parseExpFIRST[token.Type]; ok {
+			expression, err := p.ParseExp(0)
+			if err != nil {
+				return program, fmt.Errorf("program parser -> %s", err)
+			}
+			program.nodes = append(program.nodes, expression)
+		} else {
+			return program, fmt.Errorf("program parser -> expected DEF, VAR, LAMBDA, or LPAREN, got %s at %d", token.Type, token.Position)
 		}
-
-		expression, err := p.ParseExp(0)
-		if err != nil {
-			return program, fmt.Errorf("program parser -> %s", err)
-		}
-		program.nodes = append(program.nodes, expression)
 	}
 
 	return program, nil
@@ -58,10 +66,15 @@ func (p *Parser) ParseProgram() (ProgramNode, error) {
 
 // https://www.engr.mun.ca/~theo/Misc/exp_parsing.htm#climbing
 
-var parseExpFIRST = map[TokenType]bool{VAR_TOKEN: true, LAMBDA_TOKEN: true, LPAREN_TOKEN: true}
+var parseExpFIRST = map[TokenType]bool{
+	VAR_TOKEN:    true,
+	LAMBDA_TOKEN: true,
+	LPAREN_TOKEN: true,
+	NAME_TOKEN:   true,
+}
 
 func (p *Parser) ParseExp(prec int) (Node, error) {
-	exp, err := p.ParseP()
+	exp, err := p.ParsePrefix()
 	if err != nil {
 		return nil, fmt.Errorf("expression parser -> %s", err)
 	}
@@ -85,13 +98,13 @@ func (p *Parser) ParseExp(prec int) (Node, error) {
 	return exp, nil
 }
 
-func (p *Parser) ParseP() (Node, error) {
+func (p *Parser) ParsePrefix() (Node, error) {
 	token := p.currentToken()
 
 	if token.Type == VAR_TOKEN {
 		varNode, err := p.ParseVar()
 		if err != nil {
-			return varNode, fmt.Errorf("p parser -> %s", err)
+			return varNode, fmt.Errorf("prefix parser -> %s", err)
 		}
 		return varNode, nil
 	}
@@ -99,7 +112,7 @@ func (p *Parser) ParseP() (Node, error) {
 	if token.Type == LAMBDA_TOKEN {
 		funcNode, err := p.ParseFunction()
 		if err != nil {
-			return funcNode, fmt.Errorf("p parser -> %s", err)
+			return funcNode, fmt.Errorf("prefix parser -> %s", err)
 		}
 		return funcNode, nil
 	}
@@ -107,12 +120,20 @@ func (p *Parser) ParseP() (Node, error) {
 	if token.Type == LPAREN_TOKEN {
 		groupedNode, err := p.ParseGrouped()
 		if err != nil {
-			return groupedNode, fmt.Errorf("p parser -> %s", err)
+			return groupedNode, fmt.Errorf("prefix parser -> %s", err)
 		}
 		return groupedNode, nil
 	}
 
-	return ProgramNode{}, fmt.Errorf("p parser -> expected VAR, LAMBDA, or LPAREN, got %s at %d", token.Type, token.Position)
+	if token.Type == NAME_TOKEN {
+		fNameNode, err := p.ParseName()
+		if err != nil {
+			return fNameNode, fmt.Errorf("prefix parser -> %s", err)
+		}
+		return fNameNode, nil
+	}
+
+	return ProgramNode{}, fmt.Errorf("prefix parser -> expected VAR, LAMBDA, LPAREN, or NAME, got %s at %d", token.Type, token.Position)
 }
 
 func (p *Parser) ParseVar() (VarNode, error) {
@@ -199,4 +220,41 @@ func (p *Parser) ParseVarList() ([]VarNode, error) {
 	p.position-- // we overshot by one
 
 	return varNodes, nil
+}
+
+func (p *Parser) ParseName() (NameNode, error) {
+	nameNode := NameNode{}
+
+	token := p.currentToken()
+	if token.Type != NAME_TOKEN {
+		return nameNode, fmt.Errorf("name parser -> excpected NAME, got %s at %d", token.Type, token.Position)
+	}
+	nameNode.identifier = token.Literal
+
+	return nameNode, nil
+}
+
+func (p *Parser) ParseNamedFunction() (NamedFunctionNode, error) {
+	namedFunctionNode := NamedFunctionNode{}
+
+	token := p.currentToken()
+	if token.Type != DEF_TOKEN {
+		return namedFunctionNode, fmt.Errorf("named function parser -> excpected DEF, got %s at %d", token.Type, token.Position)
+	}
+
+	token = p.advanceToken()
+	nameNode, err := p.ParseName()
+	if err != nil {
+		return namedFunctionNode, fmt.Errorf("named function parser -> %s", err)
+	}
+	namedFunctionNode.identifier = nameNode
+
+	token = p.advanceToken()
+	functionNode, err := p.ParseFunction()
+	if err != nil {
+		return namedFunctionNode, fmt.Errorf("named function parser -> %s", err)
+	}
+	namedFunctionNode.function = functionNode
+
+	return namedFunctionNode, nil
 }

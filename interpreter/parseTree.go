@@ -34,13 +34,13 @@ func (n NameNode) String() string {
 	return string(n.identifier)
 }
 
-type NamedFuncNode struct {
+type NamedFunctionNode struct {
 	identifier NameNode
 	function   FunctionNode
 }
 
-func (n NamedFuncNode) String() string {
-	return fmt.Sprintf("%s -> %s )", n.identifier, n.function)
+func (n NamedFunctionNode) String() string {
+	return fmt.Sprintf("%s = %s", n.identifier, n.function)
 }
 
 type ApplicationNode struct {
