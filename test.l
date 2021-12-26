@@ -8,3 +8,5 @@ x \f . y u d
 \x . \y . x y (\f. h u) t
 \ x . x z \y. x y
 (\ x.x z) \ y.w \ w.w x y z
+
+\ x y z . x x \ y . \ f . a

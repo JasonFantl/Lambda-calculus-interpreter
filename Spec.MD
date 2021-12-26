@@ -29,12 +29,12 @@ variable names will be lowercase
 
 ## Next grammar:
 <program> ::= [these are separated by new lines]
-    | def <fname> [<var> <var >...] = <exp>
+    | def <fname> \<var> [<var> ... <var>] . <exp>
     | <exp>
 
 <exp> ::=
     | <var>
-    | \<var> . <exp>
+    | \<var> [<var> ... <var>] . <exp>
     | ( <exp> )
     | <exp> <exp>
     | <fname>

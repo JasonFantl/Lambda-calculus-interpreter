@@ -4,30 +4,30 @@ import (
 	"fmt"
 )
 
-type EngParser struct {
+type Parser struct {
 	tokens   []Token
 	position int // token index
 	root     ProgramNode
 }
 
-func NewEngParser(tokens []Token) *EngParser {
-	return &EngParser{
+func NewParser(tokens []Token) *Parser {
+	return &Parser{
 		tokens:   tokens,
 		position: 0,
 		root:     ProgramNode{make([]Node, 0)},
 	}
 }
 
-func (p *EngParser) Parse() (ProgramNode, error) {
+func (p *Parser) Parse() (ProgramNode, error) {
 	return p.ParseProgram()
 }
 
-func (p *EngParser) advanceToken() Token {
+func (p *Parser) advanceToken() Token {
 	p.position++
 	return p.currentToken()
 }
 
-func (p *EngParser) currentToken() Token {
+func (p *Parser) currentToken() Token {
 	if p.position < len(p.tokens) {
 		return p.tokens[p.position]
 	}
@@ -36,7 +36,7 @@ func (p *EngParser) currentToken() Token {
 
 // NOTE: each parse ends at the last successful token of the parse
 
-func (p *EngParser) ParseProgram() (ProgramNode, error) {
+func (p *Parser) ParseProgram() (ProgramNode, error) {
 	program := ProgramNode{make([]Node, 0)}
 
 	for token := p.currentToken(); token.Type != EOF_TOKEN; token = p.advanceToken() {
@@ -57,14 +57,17 @@ func (p *EngParser) ParseProgram() (ProgramNode, error) {
 }
 
 // https://www.engr.mun.ca/~theo/Misc/exp_parsing.htm#climbing
-func (p *EngParser) ParseExp(prec int) (Node, error) {
+
+var parseExpFIRST = map[TokenType]bool{VAR_TOKEN: true, LAMBDA_TOKEN: true, LPAREN_TOKEN: true}
+
+func (p *Parser) ParseExp(prec int) (Node, error) {
 	exp, err := p.ParseP()
 	if err != nil {
 		return nil, fmt.Errorf("expression parser -> %s", err)
 	}
 
 	// we use FIRST to check if we have an "application operator"
-	for nextToken := p.advanceToken(); parseExpressionPrimeFIRST[nextToken.Type] &&
+	for nextToken := p.advanceToken(); parseExpFIRST[nextToken.Type] &&
 		prec <= 0; nextToken = p.advanceToken() {
 
 		q := prec + 1
@@ -82,7 +85,7 @@ func (p *EngParser) ParseExp(prec int) (Node, error) {
 	return exp, nil
 }
 
-func (p *EngParser) ParseP() (Node, error) {
+func (p *Parser) ParseP() (Node, error) {
 	token := p.currentToken()
 
 	if token.Type == VAR_TOKEN {
@@ -112,7 +115,7 @@ func (p *EngParser) ParseP() (Node, error) {
 	return ProgramNode{}, fmt.Errorf("p parser -> expected VAR, LAMBDA, or LPAREN, got %s at %d", token.Type, token.Position)
 }
 
-func (p *EngParser) ParseVar() (VarNode, error) {
+func (p *Parser) ParseVar() (VarNode, error) {
 	varNode := VarNode{}
 
 	token := p.currentToken()
@@ -124,8 +127,8 @@ func (p *EngParser) ParseVar() (VarNode, error) {
 	return varNode, nil
 }
 
-func (p *EngParser) ParseFunction() (FunctionNode, error) {
-	functionNode := FunctionNode{}
+func (p *Parser) ParseFunction() (FunctionNode, error) {
+	functionNode := FunctionNode{inputs: make([]VarNode, 0)}
 
 	token := p.currentToken()
 	if token.Type != LAMBDA_TOKEN {
@@ -133,11 +136,11 @@ func (p *EngParser) ParseFunction() (FunctionNode, error) {
 	}
 
 	token = p.advanceToken()
-	varNode, err := p.ParseVar()
+	varNodes, err := p.ParseVarList()
 	if err != nil {
 		return functionNode, fmt.Errorf("function parser -> %s", err)
 	}
-	functionNode.input = varNode
+	functionNode.inputs = varNodes
 
 	token = p.advanceToken()
 	if token.Type != PERIOD_TOKEN {
@@ -154,7 +157,7 @@ func (p *EngParser) ParseFunction() (FunctionNode, error) {
 	return functionNode, nil
 }
 
-func (p *EngParser) ParseGrouped() (Node, error) {
+func (p *Parser) ParseGrouped() (Node, error) {
 
 	token := p.currentToken()
 	if token.Type != LPAREN_TOKEN {
@@ -173,4 +176,27 @@ func (p *EngParser) ParseGrouped() (Node, error) {
 	}
 
 	return node, nil
+}
+
+func (p *Parser) ParseVarList() ([]VarNode, error) {
+	varNodes := make([]VarNode, 0)
+
+	// requires at least one var
+	varNode, err := p.ParseVar()
+	if err != nil {
+		return varNodes, fmt.Errorf("varList parser -> %s", err)
+	}
+	varNodes = append(varNodes, varNode)
+
+	// the rest are optional. FIRST here is just VAR_TOKEN
+	for token := p.advanceToken(); token.Type == VAR_TOKEN; token = p.advanceToken() {
+		varNode, err := p.ParseVar()
+		if err != nil {
+			return varNodes, fmt.Errorf("varList parser -> %s", err)
+		}
+		varNodes = append(varNodes, varNode)
+	}
+	p.position-- // we overshot by one
+
+	return varNodes, nil
 }
