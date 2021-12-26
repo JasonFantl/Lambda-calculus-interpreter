@@ -57,7 +57,7 @@ func main() {
 		}
 		fmt.Println(tokens)
 
-		p := interpreter.NewParser(tokens)
+		p := interpreter.NewEngParser(tokens)
 		tree, err := p.Parse()
 		if err != nil {
 			fmt.Println(err)

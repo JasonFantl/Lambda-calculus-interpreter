@@ -1,6 +1,10 @@
-\x . x
 a
-\in . \in . (x yo)
-F' x y = \s . (x y)
+( b)
+\x . x
+a b
+\in . \in2 . x yo
 (x (y))
-G = \f . (f (F' s f))
+x \f . y u d
+\x . \y . x y (\f. h u) t
+\ x . x z \y. x y
+(\ x.x z) \ y.w \ w.w x y z

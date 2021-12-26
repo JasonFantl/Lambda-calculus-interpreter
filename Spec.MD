@@ -1,25 +1,47 @@
 
 Name will only contain letters and numbers
 
-Function names will be capatalized
+Function names will be capitalized
 
 variable names will be lowercase
 
+## Easy Grammar:
 
-## Grammar:
+<exp> ::=
+    | <var>
+    | \<var> . <exp>
+    | ( <exp> <exp> )
 
-<program> ::= [these are seperated by new lines]
-    | <fname> [<var> <var >...] = <exp>
+## Next Grammar:
+
+<exp> ::=
+    | <var>
+    | \<var> . <exp>
+    | <exp> <exp>
+    | ( <exp> )
+
+## With associativity
+<exp> ::=
+    | <var>
+    | \<var> . <exp>    [right associative]
+    | <exp> <exp>       [left associative]
+    | ( <exp> )
+
+## Next grammar:
+<program> ::= [these are separated by new lines]
+    | def <fname> [<var> <var >...] = <exp>
     | <exp>
 
 <exp> ::=
     | <var>
     | \<var> . <exp>
     | ( <exp> )
-    | ( <exp> <exp> )
-    | ( <fname> [<exp> <exp> ...] )
+    | <exp> <exp>
+    | <fname>
 
 ## Later:
-use precedence to remove unneeded pranthesis
+named functions
+semantics
 alpha transform (is this needed?)
 beta reduction
+named function reductions 

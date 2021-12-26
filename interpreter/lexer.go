@@ -20,9 +20,9 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 	tokens := make([]Token, 0)
 
 	t, err := l.nextToken()
-	for err == nil && t.Type != EOF {
+	for err == nil && t.Type != EOF_TOKEN {
 		// ignore illegal tokens
-		if t.Type == ILLEGAL {
+		if t.Type == ILLEGAL_TOKEN {
 			fmt.Printf("illegal token:\n\t%s\t%*s\n", string(l.input), t.Position+1, "^")
 		} else {
 			tokens = append(tokens, t)
@@ -61,33 +61,33 @@ func (l *Lexer) nextToken() (Token, error) {
 		r, eof = l.nextRune()
 	}
 
-	token := Token{EOF, "", l.position}
+	token := Token{EOF_TOKEN, "", l.position}
 	if eof {
 		return token, nil
 	}
 
 	switch r {
 	case '\\':
-		token.Type = LAMBDA
+		token.Type = LAMBDA_TOKEN
 	case '.':
-		token.Type = PERIOD
+		token.Type = PERIOD_TOKEN
 	case '=':
-		token.Type = EQUALS
+		token.Type = EQUALS_TOKEN
 	case '(':
-		token.Type = LPAREN
+		token.Type = LPAREN_TOKEN
 	case ')':
-		token.Type = RPAREN
+		token.Type = RPAREN_TOKEN
 	case '\n':
-		token.Type = NEWLINE
+		token.Type = NEWLINE_TOKEN
 	default:
 		if beginVar(r) {
-			token.Type = VAR
+			token.Type = VAR_TOKEN
 			token.Literal = l.lexVar()
 		} else if beginFName(r) {
-			token.Type = FNAME
+			token.Type = FNAME_TOKEN
 			token.Literal = l.lexFName()
 		} else {
-			token.Type = ILLEGAL
+			token.Type = ILLEGAL_TOKEN
 		}
 	}
 

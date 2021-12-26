@@ -26,35 +26,6 @@ func (n VarNode) String() string {
 	return string(n.identifier)
 }
 
-type NamedFunctionDefNode struct {
-	identifier string
-	inputs     []VarNode
-	body       Node
-}
-
-func (n NamedFunctionDefNode) String() string {
-	inputs := ""
-	for _, input := range n.inputs {
-		inputs += input.String() + " "
-	}
-
-	return fmt.Sprintf("%s %s= %s", n.identifier, inputs, n.body)
-}
-
-type NamedFunctionCallNode struct {
-	identifier string
-	inputs     []Node
-}
-
-func (n NamedFunctionCallNode) String() string {
-	inputs := ""
-	for _, input := range n.inputs {
-		inputs += "(" + input.String() + ") "
-	}
-
-	return fmt.Sprintf("( %s %s)", n.identifier, inputs)
-}
-
 type ApplicationNode struct {
 	lExp Node
 	rExp Node

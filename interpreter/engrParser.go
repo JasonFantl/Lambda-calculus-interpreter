@@ -4,39 +4,39 @@ import (
 	"fmt"
 )
 
-type Parser struct {
+type EngParser struct {
 	tokens   []Token
 	position int // token index
 	root     ProgramNode
 }
 
-func NewParser(tokens []Token) *Parser {
-	return &Parser{
+func NewEngParser(tokens []Token) *EngParser {
+	return &EngParser{
 		tokens:   tokens,
 		position: 0,
 		root:     ProgramNode{make([]Node, 0)},
 	}
 }
 
-func (p *Parser) Parse() (ProgramNode, error) {
+func (p *EngParser) Parse() (ProgramNode, error) {
 	return p.ParseProgram()
 }
 
-func (p *Parser) advanceToken() Token {
+func (p *EngParser) advanceToken() Token {
 	p.position++
 	return p.currentToken()
 }
 
-func (p *Parser) currentToken() Token {
+func (p *EngParser) currentToken() Token {
 	if p.position < len(p.tokens) {
 		return p.tokens[p.position]
 	}
 	return p.tokens[len(p.tokens)-1] // return last token EOF
 }
 
-// NOTE: each parse ends at the last sucsessful token of the parse
+// NOTE: each parse ends at the last successful token of the parse
 
-func (p *Parser) ParseProgram() (ProgramNode, error) {
+func (p *EngParser) ParseProgram() (ProgramNode, error) {
 	program := ProgramNode{make([]Node, 0)}
 
 	for token := p.currentToken(); token.Type != EOF_TOKEN; token = p.advanceToken() {
@@ -46,7 +46,7 @@ func (p *Parser) ParseProgram() (ProgramNode, error) {
 			continue
 		}
 
-		expression, err := p.ParseExpression()
+		expression, err := p.ParseExp(0)
 		if err != nil {
 			return program, fmt.Errorf("program parser -> %s", err)
 		}
@@ -56,77 +56,63 @@ func (p *Parser) ParseProgram() (ProgramNode, error) {
 	return program, nil
 }
 
-// for all the love that is mighty, please refactor this
-func (p *Parser) ParseExpression() (Node, error) {
+// https://www.engr.mun.ca/~theo/Misc/exp_parsing.htm#climbing
+func (p *EngParser) ParseExp(prec int) (Node, error) {
+	exp, err := p.ParseP()
+	if err != nil {
+		return nil, fmt.Errorf("expression parser -> %s", err)
+	}
+
+	// we use FIRST to check if we have an "application operator"
+	for nextToken := p.advanceToken(); parseExpressionPrimeFIRST[nextToken.Type] &&
+		prec <= 0; nextToken = p.advanceToken() {
+
+		q := prec + 1
+
+		appNode, err := p.ParseExp(q)
+		if err != nil {
+			return ProgramNode{}, fmt.Errorf("expression parser -> %s", err)
+		}
+
+		exp = ApplicationNode{exp, appNode}
+	}
+	// we went too far, need to decrement
+	p.position--
+
+	return exp, nil
+}
+
+func (p *EngParser) ParseP() (Node, error) {
 	token := p.currentToken()
 
-	// Production: <var> S'
 	if token.Type == VAR_TOKEN {
 		varNode, err := p.ParseVar()
 		if err != nil {
-			return varNode, fmt.Errorf("expression parser -> %s", err)
+			return varNode, fmt.Errorf("p parser -> %s", err)
 		}
-		p.advanceToken()
-		appNode, err := p.ParseExpressionPrime(varNode)
-		if err != nil {
-			return appNode, fmt.Errorf("expression parser -> %s", err)
-		}
-		return appNode, nil
+		return varNode, nil
 	}
 
-	// Production: \<var> . S S'
 	if token.Type == LAMBDA_TOKEN {
 		funcNode, err := p.ParseFunction()
 		if err != nil {
-			return funcNode, fmt.Errorf("expression parser -> %s", err)
+			return funcNode, fmt.Errorf("p parser -> %s", err)
 		}
-		p.advanceToken()
-		appNode, err := p.ParseExpressionPrime(funcNode)
-		if err != nil {
-			return appNode, fmt.Errorf("expression parser -> %s", err)
-		}
-		return appNode, nil
+		return funcNode, nil
 	}
 
-	// Production: ( S ) S'
 	if token.Type == LPAREN_TOKEN {
-		expNode, err := p.ParseGrouped()
+		groupedNode, err := p.ParseGrouped()
 		if err != nil {
-			return expNode, fmt.Errorf("expression parser -> %s", err)
+			return groupedNode, fmt.Errorf("p parser -> %s", err)
 		}
-		p.advanceToken()
-		appNode, err := p.ParseExpressionPrime(expNode)
-		if err != nil {
-			return appNode, fmt.Errorf("expression parser -> %s", err)
-		}
-		return appNode, nil
+		return groupedNode, nil
 	}
 
-	return ProgramNode{}, fmt.Errorf("expression parser -> expected VAR, LAMBDA, or LPAREN, got %s at %d", token.Type, token.Position)
+	return ProgramNode{}, fmt.Errorf("p parser -> expected VAR, LAMBDA, or LPAREN, got %s at %d", token.Type, token.Position)
 }
 
-// we are hardcoding in FIRST, should be automated to be safe
-var parseExpressionPrimeFIRST = map[TokenType]bool{VAR_TOKEN: true, LAMBDA_TOKEN: true, LPAREN_TOKEN: true}
-
-func (p *Parser) ParseExpressionPrime(node Node) (Node, error) {
-
-	token := p.currentToken()
-
-	if parseExpressionPrimeFIRST[token.Type] { // this is the application production
-		expr, err := p.ParseExpression()
-		if err != nil {
-			return node, fmt.Errorf("expressionPrime parser -> %s", err)
-		}
-		return ApplicationNode{node, expr}, nil
-	}
-
-	// this is the epsilon production, need to decrement token counter
-	p.position--
-
-	return node, nil
-}
-
-func (p *Parser) ParseVar() (VarNode, error) {
+func (p *EngParser) ParseVar() (VarNode, error) {
 	varNode := VarNode{}
 
 	token := p.currentToken()
@@ -138,7 +124,7 @@ func (p *Parser) ParseVar() (VarNode, error) {
 	return varNode, nil
 }
 
-func (p *Parser) ParseFunction() (FunctionNode, error) {
+func (p *EngParser) ParseFunction() (FunctionNode, error) {
 	functionNode := FunctionNode{}
 
 	token := p.currentToken()
@@ -159,7 +145,7 @@ func (p *Parser) ParseFunction() (FunctionNode, error) {
 	}
 
 	token = p.advanceToken()
-	expression, err := p.ParseExpression()
+	expression, err := p.ParseExp(0)
 	if err != nil {
 		return functionNode, fmt.Errorf("function parser -> %s", err)
 	}
@@ -168,7 +154,7 @@ func (p *Parser) ParseFunction() (FunctionNode, error) {
 	return functionNode, nil
 }
 
-func (p *Parser) ParseGrouped() (Node, error) {
+func (p *EngParser) ParseGrouped() (Node, error) {
 
 	token := p.currentToken()
 	if token.Type != LPAREN_TOKEN {
@@ -176,7 +162,7 @@ func (p *Parser) ParseGrouped() (Node, error) {
 	}
 
 	token = p.advanceToken()
-	node, err := p.ParseExpression()
+	node, err := p.ParseExp(0)
 	if err != nil {
 		return node, fmt.Errorf("group parser -> %s", err)
 	}

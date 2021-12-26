@@ -8,21 +8,25 @@ type Token struct {
 	Position int    // char index
 }
 
+func (t Token) String() string {
+	return string(t.Type)
+}
+
 const (
-	LAMBDA = "\\"
-	PERIOD = "."
+	LAMBDA_TOKEN = "\\"
+	PERIOD_TOKEN = "."
 
-	FNAME  = "FNAME"
-	EQUALS = "="
+	FNAME_TOKEN  = "FNAME"
+	EQUALS_TOKEN = "="
 
-	LPAREN = "("
-	RPAREN = ")"
+	LPAREN_TOKEN = "("
+	RPAREN_TOKEN = ")"
 
-	VAR = "VAR"
+	VAR_TOKEN = "VAR"
 
-	ILLEGAL = "ILLEGAL"
-	NEWLINE = "NEWLINE"
-	EOF     = "EOF"
+	ILLEGAL_TOKEN = "ILLEGAL"
+	NEWLINE_TOKEN = "NEWLINE"
+	EOF_TOKEN     = "EOF"
 )
 
 func isWhitespace(r rune) bool {
