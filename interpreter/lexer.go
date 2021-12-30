@@ -90,8 +90,7 @@ func (l *Lexer) nextToken() (Token, error) {
 			token.Type = NAME_TOKEN
 			token.Literal = word
 		} else {
-			// invalid char
-			return token, fmt.Errorf("illegal character '%s' at %d", r, token.Position)
+			return token, fmt.Errorf("illegal character '%s' at %d", string(r), token.Position)
 		}
 	}
 

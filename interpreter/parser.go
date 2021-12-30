@@ -7,19 +7,14 @@ import (
 type Parser struct {
 	tokens   []Token
 	position int // token index
-	root     ProgramNode
+	root     Node
 }
 
 func NewParser(tokens []Token) *Parser {
 	return &Parser{
 		tokens:   tokens,
 		position: 0,
-		root:     ProgramNode{make([]Node, 0)},
 	}
-}
-
-func (p *Parser) Parse() (ProgramNode, error) {
-	return p.ParseProgram()
 }
 
 func (p *Parser) advanceToken() Token {
@@ -36,32 +31,24 @@ func (p *Parser) currentToken() Token {
 
 // NOTE: each parse ends at the last successful token of the parse
 
-func (p *Parser) ParseProgram() (ProgramNode, error) {
-	program := ProgramNode{make([]Node, 0)}
+func (p *Parser) Parse() (Node, error) {
 
-	for token := p.currentToken(); token.Type != EOF_TOKEN; token = p.advanceToken() {
+	token := p.currentToken()
 
-		// ignore all NEWLINEs before an expression
-		if token.Type == NEWLINE_TOKEN {
-			continue
-		} else if token.Type == DEF_TOKEN {
-			namedFunctionNode, err := p.ParseNamedFunction()
-			if err != nil {
-				return program, fmt.Errorf("program parser -> %s", err)
-			}
-			program.nodes = append(program.nodes, namedFunctionNode)
-		} else if ok := parseExpFIRST[token.Type]; ok {
-			expression, err := p.ParseExp(0)
-			if err != nil {
-				return program, fmt.Errorf("program parser -> %s", err)
-			}
-			program.nodes = append(program.nodes, expression)
-		} else {
-			return program, fmt.Errorf("program parser -> expected DEF, VAR, LAMBDA, or LPAREN, got %s at %d", token.Type, token.Position)
-		}
+	// ignore NEWLINEs before an expression
+	for token.Type == NEWLINE_TOKEN {
+		token = p.advanceToken()
 	}
-
-	return program, nil
+	if token.Type == DEF_TOKEN {
+		return p.ParseNamedFunction()
+	}
+	if ok := parseExpFIRST[token.Type]; ok {
+		return p.ParseExp(0)
+	}
+	if token.Type == EOF_TOKEN {
+		return nil, nil
+	}
+	return nil, fmt.Errorf("parser -> expected DEF, VAR, LAMBDA, or LPAREN, got %s at %d", token.Type, token.Position)
 }
 
 // https://www.engr.mun.ca/~theo/Misc/exp_parsing.htm#climbing
@@ -87,7 +74,7 @@ func (p *Parser) ParseExp(prec int) (Node, error) {
 
 		appNode, err := p.ParseExp(q)
 		if err != nil {
-			return ProgramNode{}, fmt.Errorf("expression parser -> %s", err)
+			return nil, fmt.Errorf("expression parser -> %s", err)
 		}
 
 		exp = ApplicationNode{exp, appNode}
@@ -133,7 +120,7 @@ func (p *Parser) ParsePrefix() (Node, error) {
 		return fNameNode, nil
 	}
 
-	return ProgramNode{}, fmt.Errorf("prefix parser -> expected VAR, LAMBDA, LPAREN, or NAME, got %s at %d", token.Type, token.Position)
+	return nil, fmt.Errorf("prefix parser -> expected VAR, LAMBDA, LPAREN, or NAME, got %s at %d", token.Type, token.Position)
 }
 
 func (p *Parser) ParseVar() (VarNode, error) {
@@ -149,7 +136,7 @@ func (p *Parser) ParseVar() (VarNode, error) {
 }
 
 func (p *Parser) ParseFunction() (FunctionNode, error) {
-	functionNode := FunctionNode{inputs: make([]VarNode, 0)}
+	functionNode := FunctionNode{}
 
 	token := p.currentToken()
 	if token.Type != LAMBDA_TOKEN {
@@ -161,7 +148,7 @@ func (p *Parser) ParseFunction() (FunctionNode, error) {
 	if err != nil {
 		return functionNode, fmt.Errorf("function parser -> %s", err)
 	}
-	functionNode.inputs = varNodes
+	// this is weird, but I want to transform these into single var functions, but first need the body
 
 	token = p.advanceToken()
 	if token.Type != PERIOD_TOKEN {
@@ -175,6 +162,12 @@ func (p *Parser) ParseFunction() (FunctionNode, error) {
 	}
 	functionNode.body = expression
 
+	// alright, now we use the inputs to generate nested function nodes
+	functionNode.input = varNodes[len(varNodes)-1]
+	for i := len(varNodes) - 2; i >= 0; i-- {
+		functionNode = FunctionNode{varNodes[i], functionNode}
+	}
+
 	return functionNode, nil
 }
 
@@ -182,7 +175,7 @@ func (p *Parser) ParseGrouped() (Node, error) {
 
 	token := p.currentToken()
 	if token.Type != LPAREN_TOKEN {
-		return ProgramNode{}, fmt.Errorf("group parser -> excpected LPAREN, got %s at %d", token.Type, token.Position)
+		return nil, fmt.Errorf("group parser -> excpected LPAREN, got %s at %d", token.Type, token.Position)
 	}
 
 	token = p.advanceToken()
@@ -247,7 +240,7 @@ func (p *Parser) ParseNamedFunction() (NamedFunctionNode, error) {
 	if err != nil {
 		return namedFunctionNode, fmt.Errorf("named function parser -> %s", err)
 	}
-	namedFunctionNode.identifier = nameNode
+	namedFunctionNode.name = nameNode
 
 	token = p.advanceToken()
 	functionNode, err := p.ParseFunction()

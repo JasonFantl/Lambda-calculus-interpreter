@@ -12,31 +12,16 @@ variable names will be lowercase
     | \<var> . <exp>
     | ( <exp> <exp> )
 
-## Next Grammar:
-
-<exp> ::=
-    | <var>
-    | \<var> . <exp>
-    | <exp> <exp>
-    | ( <exp> )
-
-## With associativity
-<exp> ::=
-    | <var>
-    | \<var> . <exp>    [right associative]
-    | <exp> <exp>       [left associative]
-    | ( <exp> )
-
-## Next grammar:
+## Grammar:
 <program> ::= [these are separated by new lines]
     | def <fname> \<var> [<var> ... <var>] . <exp>
     | <exp>
 
 <exp> ::=
     | <var>
-    | \<var> [<var> ... <var>] . <exp>
+    | \<var> [<var> ... <var>] . <exp> [right associative]
     | ( <exp> )
-    | <exp> <exp>
+    | <exp> <exp> [left associative]
     | <fname>
 
 ## Later:

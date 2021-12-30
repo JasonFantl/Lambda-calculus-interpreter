@@ -30,6 +30,8 @@ func main() {
 	}
 
 	// REPL
+	evaluator := interpreter.NewEvaluator()
+
 	running := true
 	for running {
 		// only print input if using shell
@@ -55,13 +57,18 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		fmt.Println(tokens)
+		// fmt.Println(tokens)
 
 		p := interpreter.NewParser(tokens)
 		tree, err := p.Parse()
 		if err != nil {
 			fmt.Println(err)
 		}
-		fmt.Println(tree)
+		// fmt.Println(tree)
+
+		val := evaluator.Evaluate(tree)
+		fmt.Println(val)
+
+		fmt.Println()
 	}
 }
