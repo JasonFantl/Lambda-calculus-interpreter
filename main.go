@@ -10,65 +10,86 @@ import (
 	"github.com/jasonfantl/lambda_interpreter/interpreter"
 )
 
+var evaluator *interpreter.Evaluator
+
 func main() {
 
 	// check if interpreter or read file
 	filePtr := flag.String("file", "/", "filepath to file to run")
 	flag.Parse()
 
-	// default is shell
-	reader := bufio.NewReader(os.Stdin)
+	evaluator = interpreter.NewEvaluator()
 
 	if *filePtr != "/" {
-		f, err := os.Open(*filePtr)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		reader = bufio.NewReader(f)
+		loadFile(*filePtr)
 	}
 
 	// REPL
-	evaluator := interpreter.NewEvaluator()
-
+	reader := bufio.NewReader(os.Stdin)
 	running := true
 	for running {
-		// only print input if using shell
-		if *filePtr == "/" {
-			fmt.Print(">>")
-		}
+		fmt.Print(">>")
 
 		input, err := reader.ReadString('\n')
-		if err != nil && err != io.EOF {
+		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		if err == io.EOF {
-			running = false
-		}
 
+		// special shell commands
 		if input == "exit\n" {
 			break
 		}
-
-		l := interpreter.NewLexer(input)
-		tokens, err := l.Tokenize()
-		if err != nil {
-			fmt.Println(err)
+		if input[0] == ':' {
+			if input[0:2] == ":l" {
+				loadFile(input[3 : len(input)-1])
+			}
+			continue
 		}
-		// fmt.Println(tokens)
 
-		p := interpreter.NewParser(tokens)
-		tree, err := p.Parse()
-		if err != nil {
-			fmt.Println(err)
-		}
-		// fmt.Println(tree)
-
-		val := evaluator.Evaluate(tree)
-		fmt.Println(val)
-
-		fmt.Println()
+		fmt.Println(interpret(input))
 	}
+}
+
+func loadFile(filepath string) {
+	f, err := os.Open(filepath)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	reader := bufio.NewReader(f)
+
+	for {
+		input, err := reader.ReadString('\n')
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		interpret(input)
+	}
+
+	fmt.Printf("Loaded file: %s\n", filepath)
+
+}
+
+func interpret(input string) interpreter.Node {
+	l := interpreter.NewLexer(input)
+	tokens, err := l.Tokenize()
+	if err != nil {
+		fmt.Println(err)
+	}
+	// fmt.Println(tokens)
+
+	p := interpreter.NewParser(tokens)
+	tree, err := p.Parse()
+	if err != nil {
+		fmt.Println(err)
+	}
+	// fmt.Println(tree)
+
+	return evaluator.Evaluate(tree)
 }
