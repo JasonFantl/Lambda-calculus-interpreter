@@ -14,7 +14,7 @@ variable names will be lowercase
 
 ## Grammar:
 <program> ::= [these are separated by new lines]
-    | def <fname> \<var> [<var> ... <var>] . <exp>
+    | def <fname> <exp>
     | <exp>
 
 <exp> ::=

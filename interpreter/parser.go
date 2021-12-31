@@ -243,11 +243,11 @@ func (p *Parser) ParseNamedFunction() (NamedFunctionNode, error) {
 	namedFunctionNode.name = nameNode
 
 	token = p.advanceToken()
-	functionNode, err := p.ParseFunction()
+	expNode, err := p.ParseExp(0)
 	if err != nil {
 		return namedFunctionNode, fmt.Errorf("named function parser -> %s", err)
 	}
-	namedFunctionNode.function = functionNode
+	namedFunctionNode.body = expNode
 
 	return namedFunctionNode, nil
 }

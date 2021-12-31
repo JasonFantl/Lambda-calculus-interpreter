@@ -4,16 +4,21 @@ import "fmt"
 
 type Evaluator struct {
 	storedFuncs map[string]Node
+	showSteps   bool
 }
 
 func NewEvaluator() *Evaluator {
 	return &Evaluator{
 		storedFuncs: make(map[string]Node),
+		showSteps:   false,
 	}
 }
 
-func (e *Evaluator) Evaluate(node Node) Node {
-	// fmt.Printf("Eval sequence bottom up:\n")
+func (e *Evaluator) Evaluate(node Node, showSteps bool) Node {
+	e.showSteps = showSteps
+	if showSteps {
+		fmt.Printf("Eval sequence bottom up:\n")
+	}
 	eval := e.evalNode(node, make(map[string]Node), 1)
 
 	if eval != nil {
@@ -30,6 +35,9 @@ func (e *Evaluator) Evaluate(node Node) Node {
 }
 
 func (e *Evaluator) evalNode(node Node, bindings map[string]Node, p int) Node {
+	if p > 999 {
+		return ErrorNode{Err: fmt.Errorf("to many evaluations, terminating")}
+	}
 	var eval Node
 	switch node := node.(type) {
 	case VarNode:
@@ -48,7 +56,7 @@ func (e *Evaluator) evalNode(node Node, bindings map[string]Node, p int) Node {
 }
 
 func (e *Evaluator) evalVar(varNode VarNode, bindings map[string]Node, p int) Node {
-	P(p, fmt.Sprintf("%s =>", varNode))
+	e.Log(p, fmt.Sprintf("%s =>", varNode))
 
 	eval, exists := bindings[varNode.identifier]
 
@@ -56,18 +64,18 @@ func (e *Evaluator) evalVar(varNode VarNode, bindings map[string]Node, p int) No
 	if !exists {
 		if varNode.identifier[0] != '*' {
 			markedName := "*" + varNode.identifier
-			P(p, fmt.Sprintf("Warning: var %s is not bound, renaming to %s to mark as free", varNode, markedName))
+			e.Log(p, fmt.Sprintf("Warning: var %s is not bound, renaming to %s to mark as free", varNode, markedName))
 			varNode.identifier = markedName
 		}
 		eval = varNode // var can evaluate to itself if not bound
 	}
 
-	P(p, fmt.Sprintf("=> %s", eval))
+	e.Log(p, fmt.Sprintf("=> %s", eval))
 	return eval
 }
 
 func (e *Evaluator) evalName(nameNode NameNode, bindings map[string]Node, p int) Node {
-	P(p, fmt.Sprintf("%s =>", nameNode))
+	e.Log(p, fmt.Sprintf("%s =>", nameNode))
 	var eval Node
 
 	eval, exists := e.storedFuncs[nameNode.identifier]
@@ -75,40 +83,40 @@ func (e *Evaluator) evalName(nameNode NameNode, bindings map[string]Node, p int)
 		fmt.Printf("name %s is not defined", nameNode.identifier)
 	}
 
-	P(p, fmt.Sprintf("=> %s", eval))
+	e.Log(p, fmt.Sprintf("=> %s", eval))
 	return eval
 }
 
 func (e *Evaluator) evalNamedFunction(namedFunctionNode NamedFunctionNode, bindings map[string]Node, p int) Node {
-	P(p, fmt.Sprintf("%s =>", namedFunctionNode))
+	e.Log(p, fmt.Sprintf("%s =>", namedFunctionNode))
 	var eval Node
 
 	// check name not already taken
 	s := namedFunctionNode.name.identifier
 	_, exists := e.storedFuncs[s]
 	if exists {
-		P(p, fmt.Sprintf("name %s is already defined", s))
+		e.Log(p, fmt.Sprintf("name %s is already defined", s))
 	} else {
-		betaReduced := e.evalFunction(namedFunctionNode.function, bindings, p+1)
+		betaReduced := e.evalNode(namedFunctionNode.body, bindings, p+1)
 		e.storedFuncs[s] = betaReduced
 		eval = betaReduced
 	}
 
-	P(p, fmt.Sprintf("=> %s", eval))
+	e.Log(p, fmt.Sprintf("=> %s", eval))
 	return eval
 }
 
 func (e *Evaluator) evalFunction(functionNode FunctionNode, bindings map[string]Node, p int) Node {
-	P(p, fmt.Sprintf("%s =>", functionNode))
+	e.Log(p, fmt.Sprintf("%s =>", functionNode))
 	var eval Node
 
 	// check if input name is already bound
 	s := functionNode.input.identifier
 	pre, exist := bindings[s]
 	if exist {
-		P(p, fmt.Sprintf("Warning: function var %s is already defined, locally overridding", s))
+		e.Log(p, fmt.Sprintf("Warning: function var %s is already defined, locally overridding", s))
 	}
-	P(p, fmt.Sprintf("Binding %s", s))
+	e.Log(p, fmt.Sprintf("Binding %s", s))
 	bindings[s] = functionNode.input
 
 	// eval
@@ -116,26 +124,26 @@ func (e *Evaluator) evalFunction(functionNode FunctionNode, bindings map[string]
 	eval = functionNode
 
 	// unbind
-	P(p, fmt.Sprintf("Unbinding %s", s))
+	e.Log(p, fmt.Sprintf("Unbinding %s", s))
 	if exist { // to remove local scope binding
 		bindings[s] = pre
 	} else {
 		delete(bindings, s)
 	}
 
-	P(p, fmt.Sprintf("=> %s", eval))
+	e.Log(p, fmt.Sprintf("=> %s", eval))
 	return eval
 }
 
 func (e *Evaluator) evalApplication(applicationNode ApplicationNode, bindings map[string]Node, p int) Node {
-	P(p, fmt.Sprintf("%s =>", applicationNode))
+	e.Log(p, fmt.Sprintf("%s =>", applicationNode))
 	var eval Node
 
 	applicationNode.lExp = e.evalNode(applicationNode.lExp, bindings, p+1)
-	P(p, fmt.Sprintf("=> %s =>", applicationNode))
+	e.Log(p, fmt.Sprintf("=> %s =>", applicationNode))
 
 	applicationNode.rExp = e.evalNode(applicationNode.rExp, bindings, p+1)
-	P(p, fmt.Sprintf("=> %s =>", applicationNode))
+	e.Log(p, fmt.Sprintf("=> %s =>", applicationNode))
 
 	switch f := applicationNode.lExp.(type) {
 	case FunctionNode:
@@ -144,33 +152,35 @@ func (e *Evaluator) evalApplication(applicationNode ApplicationNode, bindings ma
 		// bind variable
 		pre, exist := bindings[s]
 		if exist {
-			P(p, fmt.Sprintf("Warning: var %s is already defined, locally overridding", s))
+			e.Log(p, fmt.Sprintf("Warning: var %s is already defined, locally overridding", s))
 		}
 		bindings[s] = applicationNode.rExp
-		P(p, fmt.Sprintf("Binding %s to %s", s, bindings[s]))
+		e.Log(p, fmt.Sprintf("Binding %s to %s", s, bindings[s]))
 
 		// eval
 		eval = e.evalNode(f.body, bindings, p+1)
 
 		// unbind
-		P(p, fmt.Sprintf("Unbinding %s from %s", s, bindings[s]))
+		e.Log(p, fmt.Sprintf("Unbinding %s from %s", s, bindings[s]))
 		if exist { // to remove local scope binding
 			bindings[s] = pre
 		} else {
 			delete(bindings, s)
 		}
 	default:
-		P(p, fmt.Sprintf("application %s cannot be simplified", applicationNode))
+		e.Log(p, fmt.Sprintf("application %s cannot be simplified", applicationNode))
 		eval = applicationNode
 	}
 
-	P(p, fmt.Sprintf("=> %s", eval))
+	e.Log(p, fmt.Sprintf("=> %s", eval))
 	return eval
 }
 
-func P(n int, s string) {
-	// for i := 0; i < n; i++ {
-	// 	fmt.Print("\u2502 ")
-	// }
-	// fmt.Println(s)
+func (e *Evaluator) Log(n int, s string) {
+	if e.showSteps {
+		for i := 0; i < n; i++ {
+			fmt.Print("\u2502 ")
+		}
+		fmt.Println(s)
+	}
 }

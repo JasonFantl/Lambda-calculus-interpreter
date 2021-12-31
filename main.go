@@ -10,6 +10,7 @@ import (
 	"github.com/jasonfantl/lambda_interpreter/interpreter"
 )
 
+// TODO: fix beta reductions: for example ":s FLIP T" evaluates to T due to variable capture
 var evaluator *interpreter.Evaluator
 
 func main() {
@@ -37,17 +38,24 @@ func main() {
 		}
 
 		// special shell commands
-		if input == "exit\n" {
-			break
-		}
 		if input[0] == ':' {
-			if input[0:2] == ":l" {
-				loadFile(input[3 : len(input)-1])
+			switch input[1] {
+			case 'l': // load file
+				if len(input) > 3 {
+					loadFile(input[3 : len(input)-1])
+				} else {
+					fmt.Println("a filepath must be given")
+				}
+			case 'e': // exit
+				return
+			case 's': // show all the steps
+				fmt.Println(interpret(input[2:], true))
+			default:
+				fmt.Println("unrecognized command")
 			}
-			continue
+		} else {
+			fmt.Println(interpret(input, false))
 		}
-
-		fmt.Println(interpret(input))
 	}
 }
 
@@ -59,37 +67,44 @@ func loadFile(filepath string) {
 	}
 
 	reader := bufio.NewReader(f)
+	fmt.Printf("Loading file: %s...\n", filepath)
 
 	for {
 		input, err := reader.ReadString('\n')
-		if err == io.EOF {
-			break
-		} else if err != nil {
+		if err != nil && err != io.EOF {
 			fmt.Println(err)
 			return
 		}
 
-		interpret(input)
+		fmt.Println(interpret(input, false))
+
+		if err == io.EOF {
+			break
+		}
 	}
 
 	fmt.Printf("Loaded file: %s\n", filepath)
 
 }
 
-func interpret(input string) interpreter.Node {
+func interpret(input string, showSteps bool) interpreter.Node {
 	l := interpreter.NewLexer(input)
 	tokens, err := l.Tokenize()
 	if err != nil {
-		fmt.Println(err)
+		return interpreter.ErrorNode{Err: err}
 	}
-	// fmt.Println(tokens)
+	if showSteps {
+		fmt.Println(tokens)
+	}
 
 	p := interpreter.NewParser(tokens)
 	tree, err := p.Parse()
 	if err != nil {
-		fmt.Println(err)
+		return interpreter.ErrorNode{Err: err}
 	}
-	// fmt.Println(tree)
+	if showSteps {
+		fmt.Println(tree)
+	}
 
-	return evaluator.Evaluate(tree)
+	return evaluator.Evaluate(tree, showSteps)
 }

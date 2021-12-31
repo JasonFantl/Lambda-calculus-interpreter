@@ -6,7 +6,7 @@ import (
 
 type Lexer struct {
 	input    []rune
-	position int // ccurrent runes index
+	position int // current runes index
 }
 
 func NewLexer(input string) *Lexer {
@@ -20,22 +20,12 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 	tokens := make([]Token, 0)
 
 	t, err := l.nextToken()
-	for err == nil && t.Type != EOF_TOKEN {
-		// ignore illegal tokens
-		if t.Type == ILLEGAL_TOKEN {
-			fmt.Printf("illegal token:\n\t%s\t%*s\n", string(l.input), t.Position+1, "^")
-		} else {
-			tokens = append(tokens, t)
+	for ; err == nil; t, err = l.nextToken() {
+		tokens = append(tokens, t)
+		if t.Type == EOF_TOKEN {
+			break
 		}
-		t, err = l.nextToken()
 	}
-
-	if err != nil {
-		return tokens, err
-	}
-
-	// if we exited not due to error, must have been EOF
-	tokens = append(tokens, t)
 
 	return tokens, err
 }
@@ -110,6 +100,9 @@ func (l *Lexer) lexWord() string {
 
 // var begin with lowercase letter
 func isVar(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
 	// check first rune
 	b := s[0]
 	if !(b >= 'a' && b <= 'z') {
@@ -126,6 +119,9 @@ func isVar(s string) bool {
 
 // names begin with uppercase letter
 func isName(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
 	// check first rune
 	b := s[0]
 	if !(b >= 'A' && b <= 'Z') {

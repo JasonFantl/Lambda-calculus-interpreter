@@ -6,6 +6,14 @@ type Node interface {
 	String() string
 }
 
+type ErrorNode struct {
+	Err error
+}
+
+func (n ErrorNode) String() string {
+	return n.Err.Error()
+}
+
 type VarNode struct {
 	identifier string
 }
@@ -23,12 +31,12 @@ func (n NameNode) String() string {
 }
 
 type NamedFunctionNode struct {
-	name     NameNode
-	function FunctionNode
+	name NameNode
+	body Node
 }
 
 func (n NamedFunctionNode) String() string {
-	return fmt.Sprintf("%s = %s", n.name, n.function)
+	return fmt.Sprintf("%s = %s", n.name, n.body)
 }
 
 type ApplicationNode struct {
