@@ -1,33 +1,36 @@
 package interpreter
 
 import (
-	"strconv"
+	"fmt"
 )
 
-// not efficient, but works. Assumes nodes are beta reduced
-func equalNodes(n1, n2 Node) bool {
-	dBNode1 := toDeBruijnIndices(n1, make(map[string]int), 0)
-	dBNode2 := toDeBruijnIndices(n2, make(map[string]int), 0)
-
-	return dBNode1.String() == dBNode2.String()
+func (e *Evaluator) toDeBruijn(root Node) Node {
+	if e.showSteps {
+		fmt.Println("intermidiate representation:")
+	}
+	return e.dBNode(root, make(map[string]int), 0)
 }
 
-func toDeBruijnIndices(node Node, bindings map[string]int, level int) Node {
+func (e *Evaluator) dBNode(node Node, bindings map[string]int, level int) Node {
 	var eval Node
 	switch node := node.(type) {
+	case NameNode:
+		eval = e.dBName(node, bindings, level)
+	case NamedFunctionNode:
+		eval = e.dBNamedFunction(node, bindings, level)
 	case VarNode:
-		eval = dBVar(node, bindings, level)
+		eval = e.dBVar(node, bindings, level)
 	case FunctionNode:
-		eval = dBFunction(node, bindings, level)
+		eval = e.dBFunction(node, bindings, level)
 	case ApplicationNode:
-		eval = dBApplication(node, bindings, level)
+		eval = e.dBApplication(node, bindings, level)
 	}
 
 	return eval
 }
 
-func dBFunction(functionNode FunctionNode, bindings map[string]int, level int) Node {
-	var eval Node
+func (e *Evaluator) dBFunction(functionNode FunctionNode, bindings map[string]int, level int) Node {
+	e.Log(level, fmt.Sprintf("%s => function", functionNode))
 
 	// check if input name is already bound
 	s := functionNode.input.identifier
@@ -36,9 +39,7 @@ func dBFunction(functionNode FunctionNode, bindings map[string]int, level int) N
 	bindings[s] = -level
 
 	// eval
-	functionNode.input.identifier = ""
-	functionNode.body = toDeBruijnIndices(functionNode.body, bindings, level+1)
-	eval = functionNode
+	eval := FunctionDB{e.dBNode(functionNode.body, bindings, level+1)}
 
 	// unbind
 	if exist { // to remove local scope binding
@@ -47,23 +48,90 @@ func dBFunction(functionNode FunctionNode, bindings map[string]int, level int) N
 		delete(bindings, s)
 	}
 
+	e.Log(level, fmt.Sprintf("=> %s", eval))
 	return eval
 }
 
-func dBApplication(applicationNode ApplicationNode, bindings map[string]int, level int) Node {
-	return ApplicationNode{toDeBruijnIndices(applicationNode.lExp, bindings, level), toDeBruijnIndices(applicationNode.rExp, bindings, level)}
-}
+func (e *Evaluator) dBApplication(applicationNode ApplicationNode, bindings map[string]int, level int) Node {
+	e.Log(level, fmt.Sprintf("%s => application", applicationNode))
 
-func dBVar(varNode VarNode, bindings map[string]int, level int) Node {
-
-	l, exists := bindings[varNode.identifier]
-
-	// check if it needs to be marked
-	if !exists {
-		// fmt.Printf("Warning: equality checker found an unbound var %s\n", varNode)
-	} else {
-		varNode.identifier = strconv.Itoa(l + level)
+	eval := ApplicationDB{
+		e.dBNode(applicationNode.lExp, bindings, level),
+		e.dBNode(applicationNode.rExp, bindings, level),
 	}
 
-	return varNode
+	e.Log(level, fmt.Sprintf("=> %s", eval))
+	return eval
+}
+
+func (e *Evaluator) dBVar(varNode VarNode, bindings map[string]int, level int) Node {
+	e.Log(level, fmt.Sprintf("%s => var", varNode))
+	var eval Node
+
+	l, exists := bindings[varNode.identifier]
+	if !exists {
+		eval = FreeVarDB{varNode.identifier}
+	} else {
+		eval = BoundVarDB{l + level - 1}
+	}
+
+	e.Log(level, fmt.Sprintf("=> %s", eval))
+	return eval
+}
+
+// assumes storedFuncs stores funcs with DB indexing
+func (e *Evaluator) dBName(nameNode NameNode, bindings map[string]int, level int) Node {
+	e.Log(level, fmt.Sprintf("%s => name", nameNode))
+	var eval Node
+
+	body, exists := e.storedFuncs[nameNode.identifier]
+	if !exists {
+		eval = ErrorNode{fmt.Errorf("name %s is not defined", nameNode.identifier)}
+	} else {
+		eval = body
+	}
+
+	e.Log(level, fmt.Sprintf("=> %s", eval))
+	return eval
+}
+
+func (e *Evaluator) dBNamedFunction(namedFunctionNode NamedFunctionNode, bindings map[string]int, level int) Node {
+	e.Log(level, fmt.Sprintf("%s =>", namedFunctionNode))
+
+	eval := e.dBNode(namedFunctionNode.body, bindings, level)
+
+	e.Log(level, fmt.Sprintf("=> %s", eval))
+	return eval
+}
+
+type FunctionDB struct {
+	body Node
+}
+
+func (n FunctionDB) String() string {
+	return fmt.Sprintf("[%s]", n.body)
+}
+
+type ApplicationDB struct {
+	lExp, rExp Node
+}
+
+func (n ApplicationDB) String() string {
+	return fmt.Sprintf("(%s %s)", n.lExp, n.rExp)
+}
+
+type BoundVarDB struct {
+	index int
+}
+
+func (n BoundVarDB) String() string {
+	return fmt.Sprintf("%d", n.index)
+}
+
+type FreeVarDB struct {
+	identifier string
+}
+
+func (n FreeVarDB) String() string {
+	return n.identifier
 }

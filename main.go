@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/jasonfantl/lambda_interpreter/interpreter"
 )
@@ -16,14 +17,11 @@ var evaluator *interpreter.Evaluator
 func main() {
 
 	// check if interpreter or read file
-	filePtr := flag.String("file", "/", "filepath to file to run")
 	flag.Parse()
 
 	evaluator = interpreter.NewEvaluator()
 
-	if *filePtr != "/" {
-		loadFile(*filePtr)
-	}
+	loadFiles(flag.Args())
 
 	// REPL
 	reader := bufio.NewReader(os.Stdin)
@@ -42,9 +40,10 @@ func main() {
 			switch input[1] {
 			case 'l': // load file
 				if len(input) > 3 {
-					loadFile(input[3 : len(input)-1])
+					filepaths := strings.Fields(input)
+					loadFiles(filepaths)
 				} else {
-					fmt.Println("a filepath must be given")
+					fmt.Println("at least one filepath must be given")
 				}
 			case 'e': // exit
 				return
@@ -59,32 +58,37 @@ func main() {
 	}
 }
 
-func loadFile(filepath string) {
-	f, err := os.Open(filepath)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	reader := bufio.NewReader(f)
-	fmt.Printf("Loading file: %s...\n", filepath)
-
-	for {
-		input, err := reader.ReadString('\n')
-		if err != nil && err != io.EOF {
+func loadFiles(filepaths []string) {
+	for _, filepath := range filepaths {
+		f, err := os.Open(filepath)
+		if err != nil {
 			fmt.Println(err)
-			return
+			continue
 		}
 
-		fmt.Println(interpret(input, false))
+		reader := bufio.NewReader(f)
+		fmt.Printf("Loading file: %s...\n", filepath)
 
-		if err == io.EOF {
-			break
+		for {
+			input, err := reader.ReadString('\n')
+			if err != nil && err != io.EOF {
+				fmt.Println(err)
+				break
+			}
+
+			fmt.Printf(">>%s", input)
+			if err == io.EOF {
+				fmt.Println()
+			}
+			fmt.Println(interpret(input, false))
+
+			if err == io.EOF {
+				break
+			}
 		}
+
+		fmt.Printf("Loaded file: %s\n", filepath)
 	}
-
-	fmt.Printf("Loaded file: %s\n", filepath)
-
 }
 
 func interpret(input string, showSteps bool) interpreter.Node {

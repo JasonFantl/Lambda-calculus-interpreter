@@ -1,34 +1,23 @@
-## TODO
-beta reductions only work on free variables, still variable captures on bound variables. Exe: `>>:s AND T T`
-
 # Use
 
-You can load a file when starting the program. For example, to load `bools.l` you would type 
+You can load files when starting the program. For example, to load `bools.l` and `test.txt` you would type 
 
 ``` shell
-go run main.go -file=bools.l
+go run main.go bools.l test.txt
 ```
 _______
 
-While in the shell you can load a file. For example
+While in the shell you can load files. For example
 
 ``` shell
->>:l bools.l
+>>:l bools.l test.txt
 ```
-
 _______
 
 While in the shell you can have the interpreter show each of the steps taken to evaluate an expression. For example
 
 ``` shell
 >>:s (\a b . b a) x \x . x
-```
-_______
-
-While in the shell you can load a file. For example
-
-``` shell
->>:l bools.l
 ```
 _______
 

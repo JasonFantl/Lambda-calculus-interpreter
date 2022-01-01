@@ -1,6 +1,8 @@
 package interpreter
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Evaluator struct {
 	storedFuncs map[string]Node
@@ -16,164 +18,122 @@ func NewEvaluator() *Evaluator {
 
 func (e *Evaluator) Evaluate(node Node, showSteps bool) Node {
 	e.showSteps = showSteps
-	if showSteps {
-		fmt.Printf("Eval sequence bottom up:\n")
-	}
-	eval := e.evalNode(node, make(map[string]Node), 1)
 
-	if eval != nil {
-		// check if equal to any stored
-		for name, node := range e.storedFuncs {
-			if equalNodes(eval, node) {
-				return NameNode{name}
-			}
+	if node == nil {
+		return ErrorNode{fmt.Errorf("")}
+	}
+
+	switch node := node.(type) {
+	case NamedFunctionNode: // if its a function definition, store
+		s := node.name.identifier
+		_, exists := e.storedFuncs[s]
+		if exists {
+			return ErrorNode{fmt.Errorf("name %s is already defined", s)}
+		}
+
+		eval := e.evalNode(e.toDeBruijn(node.body), make([]Node, 0), BoundVarDB{0}, 0, 0)
+		e.storedFuncs[s] = eval
+		return eval
+	}
+
+	// otherwise evaluate
+	eval := e.evalNode(e.toDeBruijn(node), make([]Node, 0), BoundVarDB{0}, 0, 0)
+	// check if result is recognized
+	for name, node := range e.storedFuncs {
+		if node.String() == eval.String() {
+			return NameNode{name}
 		}
 	}
-
 	return eval
-
 }
 
-func (e *Evaluator) evalNode(node Node, bindings map[string]Node, p int) Node {
+func (e *Evaluator) evalNode(node Node, bindings []Node, en Node, m, p int) Node {
 	if p > 999 {
-		return ErrorNode{Err: fmt.Errorf("to many evaluations, terminating")}
+		return ErrorNode{Err: fmt.Errorf("stack overflow")}
 	}
+
+	e.Log(p, fmt.Sprintf("%s =>", node))
+
 	var eval Node
 	switch node := node.(type) {
-	case VarNode:
-		eval = e.evalVar(node, bindings, p)
-	case NameNode:
-		eval = e.evalName(node, bindings, p)
-	case NamedFunctionNode:
-		eval = e.evalNamedFunction(node, bindings, p)
-	case FunctionNode:
-		eval = e.evalFunction(node, bindings, p)
-	case ApplicationNode:
-		eval = e.evalApplication(node, bindings, p)
-	}
-
-	return eval
-}
-
-func (e *Evaluator) evalVar(varNode VarNode, bindings map[string]Node, p int) Node {
-	e.Log(p, fmt.Sprintf("%s =>", varNode))
-
-	eval, exists := bindings[varNode.identifier]
-
-	// check if it needs to be marked
-	if !exists {
-		if varNode.identifier[0] != '*' {
-			markedName := "*" + varNode.identifier
-			e.Log(p, fmt.Sprintf("Warning: var %s is not bound, renaming to %s to mark as free", varNode, markedName))
-			varNode.identifier = markedName
+	case BoundVarDB:
+		if node.index == m {
+			eval = e.evalNode(en, bindings, en, m, p)
+		} else {
+			eval = node
 		}
-		eval = varNode // var can evaluate to itself if not bound
+	case FreeVarDB:
+		eval = node
+	case FunctionDB:
+		eval = e.evalFunction(node, bindings, e.shiftIndecies(en, 1, 0), m+1, p)
+	case ApplicationDB:
+		eval = e.evalApplication(node, bindings, en, m, p)
+	case ErrorNode:
+		eval = node
+	default:
+		return ErrorNode{fmt.Errorf("unrecognized node type %s", node.String())}
 	}
 
 	e.Log(p, fmt.Sprintf("=> %s", eval))
 	return eval
 }
 
-func (e *Evaluator) evalName(nameNode NameNode, bindings map[string]Node, p int) Node {
-	e.Log(p, fmt.Sprintf("%s =>", nameNode))
-	var eval Node
+func (e *Evaluator) evalFunction(functionNode FunctionDB, bindings []Node, en Node, m, p int) Node {
 
-	eval, exists := e.storedFuncs[nameNode.identifier]
-	if !exists {
-		fmt.Printf("name %s is not defined", nameNode.identifier)
-	}
+	newBindings := append(bindings, VarNode{"~"})
+	e.Log(p, fmt.Sprintf("binding ~ %v", newBindings))
 
-	e.Log(p, fmt.Sprintf("=> %s", eval))
+	functionNode.body = e.evalNode(functionNode.body, newBindings, en, m, p+1) // special varNode to indicate self
+	eval := functionNode
+
+	e.Log(p, fmt.Sprintf("unbinding ~ %v", bindings))
+
 	return eval
 }
 
-func (e *Evaluator) evalNamedFunction(namedFunctionNode NamedFunctionNode, bindings map[string]Node, p int) Node {
-	e.Log(p, fmt.Sprintf("%s =>", namedFunctionNode))
-	var eval Node
+func (e *Evaluator) evalApplication(applicationNode ApplicationDB, bindings []Node, en Node, m, p int) Node {
 
-	// check name not already taken
-	s := namedFunctionNode.name.identifier
-	_, exists := e.storedFuncs[s]
-	if exists {
-		e.Log(p, fmt.Sprintf("name %s is already defined", s))
-	} else {
-		betaReduced := e.evalNode(namedFunctionNode.body, bindings, p+1)
-		e.storedFuncs[s] = betaReduced
-		eval = betaReduced
-	}
-
-	e.Log(p, fmt.Sprintf("=> %s", eval))
-	return eval
-}
-
-func (e *Evaluator) evalFunction(functionNode FunctionNode, bindings map[string]Node, p int) Node {
-	e.Log(p, fmt.Sprintf("%s =>", functionNode))
-	var eval Node
-
-	// check if input name is already bound
-	s := functionNode.input.identifier
-	pre, exist := bindings[s]
-	if exist {
-		e.Log(p, fmt.Sprintf("Warning: function var %s is already defined, locally overridding", s))
-	}
-	e.Log(p, fmt.Sprintf("Binding %s", s))
-	bindings[s] = functionNode.input
-
-	// eval
-	functionNode.body = e.evalNode(functionNode.body, bindings, p+1)
-	eval = functionNode
-
-	// unbind
-	e.Log(p, fmt.Sprintf("Unbinding %s", s))
-	if exist { // to remove local scope binding
-		bindings[s] = pre
-	} else {
-		delete(bindings, s)
-	}
-
-	e.Log(p, fmt.Sprintf("=> %s", eval))
-	return eval
-}
-
-func (e *Evaluator) evalApplication(applicationNode ApplicationNode, bindings map[string]Node, p int) Node {
-	e.Log(p, fmt.Sprintf("%s =>", applicationNode))
-	var eval Node
-
-	applicationNode.lExp = e.evalNode(applicationNode.lExp, bindings, p+1)
+	e.Log(p, fmt.Sprintf("evaluating the left expression"))
+	applicationNode.lExp = e.evalNode(applicationNode.lExp, bindings, en, m, p+1)
 	e.Log(p, fmt.Sprintf("=> %s =>", applicationNode))
 
-	applicationNode.rExp = e.evalNode(applicationNode.rExp, bindings, p+1)
+	e.Log(p, fmt.Sprintf("evaluating the right expression"))
+	applicationNode.rExp = e.evalNode(applicationNode.rExp, bindings, en, m, p+1)
 	e.Log(p, fmt.Sprintf("=> %s =>", applicationNode))
 
 	switch f := applicationNode.lExp.(type) {
-	case FunctionNode:
-		s := f.input.identifier
-
-		// bind variable
-		pre, exist := bindings[s]
-		if exist {
-			e.Log(p, fmt.Sprintf("Warning: var %s is already defined, locally overridding", s))
-		}
-		bindings[s] = applicationNode.rExp
-		e.Log(p, fmt.Sprintf("Binding %s to %s", s, bindings[s]))
-
-		// eval
-		eval = e.evalNode(f.body, bindings, p+1)
-
-		// unbind
-		e.Log(p, fmt.Sprintf("Unbinding %s from %s", s, bindings[s]))
-		if exist { // to remove local scope binding
-			bindings[s] = pre
-		} else {
-			delete(bindings, s)
-		}
-	default:
-		e.Log(p, fmt.Sprintf("application %s cannot be simplified", applicationNode))
-		eval = applicationNode
+	case FunctionDB:
+		e.Log(p, fmt.Sprintf("evaluating the entire expression"))
+		newBindings := append(bindings, applicationNode.rExp)
+		e.Log(p, fmt.Sprintf("binding %s %v", applicationNode.rExp, newBindings))
+		eval := e.evalNode(f.body, newBindings, e.shiftIndecies(applicationNode.rExp, 1, 0), 0, p+1)
+		eval = e.shiftIndecies(eval, -1, 0)
+		e.Log(p, fmt.Sprintf("unbinding %s %v", applicationNode.rExp, bindings))
+		return eval
 	}
 
-	e.Log(p, fmt.Sprintf("=> %s", eval))
-	return eval
+	return applicationNode
+}
+
+func (e *Evaluator) shiftIndecies(node Node, i, c int) Node {
+	switch node := node.(type) {
+	case FreeVarDB:
+		return node
+	case BoundVarDB:
+		if node.index < c {
+			return node
+		}
+		node.index += i
+		return node
+	case FunctionDB:
+		node.body = e.shiftIndecies(node.body, i, c+1)
+		return node
+	case ApplicationDB:
+		node.lExp = e.shiftIndecies(node.lExp, i, c)
+		node.rExp = e.shiftIndecies(node.rExp, i, c)
+		return node
+	}
+	return ErrorNode{fmt.Errorf("unrecognized type for shifting %s", node)}
 }
 
 func (e *Evaluator) Log(n int, s string) {
@@ -183,4 +143,11 @@ func (e *Evaluator) Log(n int, s string) {
 		}
 		fmt.Println(s)
 	}
+}
+
+func (e *Evaluator) equalNodes(n1, n2 Node) bool {
+	dBNode1 := e.toDeBruijn(n1)
+	dBNode2 := e.toDeBruijn(n2)
+
+	return dBNode1.String() == dBNode2.String()
 }
