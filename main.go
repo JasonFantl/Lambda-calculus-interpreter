@@ -21,7 +21,8 @@ func main() {
 
 	evaluator = interpreter.NewEvaluator()
 
-	loadFiles(flag.Args())
+	filepaths := flag.Args()
+	loadFiles(filepaths)
 
 	// REPL
 	reader := bufio.NewReader(os.Stdin)
@@ -40,11 +41,13 @@ func main() {
 			switch input[1] {
 			case 'l': // load file
 				if len(input) > 3 {
-					filepaths := strings.Fields(input)
+					filepaths = append(filepaths, strings.Fields(input)...)
 					loadFiles(filepaths)
 				} else {
 					fmt.Println("at least one filepath must be given")
 				}
+			case 'r': // reload file
+				loadFiles(filepaths)
 			case 'e': // exit
 				return
 			case 's': // show all the steps

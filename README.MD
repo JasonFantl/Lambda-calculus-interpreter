@@ -5,12 +5,16 @@ You can load files when starting the program. For example, to load `bools.l` and
 ``` shell
 go run main.go bools.l test.txt
 ```
-_______
 
 While in the shell you can load files. For example
 
 ``` shell
 >>:l bools.l test.txt
+```
+
+And reload all previously loaded files with
+``` shell
+>>:r
 ```
 _______
 

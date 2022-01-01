@@ -132,6 +132,8 @@ func (e *Evaluator) shiftIndecies(node Node, i, c int) Node {
 		node.lExp = e.shiftIndecies(node.lExp, i, c)
 		node.rExp = e.shiftIndecies(node.rExp, i, c)
 		return node
+	case ErrorNode:
+		return node
 	}
 	return ErrorNode{fmt.Errorf("unrecognized type for shifting %s", node)}
 }
