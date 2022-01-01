@@ -32,18 +32,26 @@ func (e *Evaluator) Evaluate(node Node, showSteps bool) Node {
 		}
 
 		eval := e.evalNode(e.toDeBruijn(node.body), make([]Node, 0), BoundVarDB{0}, 0, 0)
+
 		e.storedFuncs[s] = eval
 		return eval
 	}
 
 	// otherwise evaluate
 	eval := e.evalNode(e.toDeBruijn(node), make([]Node, 0), BoundVarDB{0}, 0, 0)
+
 	// check if result is recognized
+	namedNode := NameNode{""}
 	for name, node := range e.storedFuncs {
 		if node.String() == eval.String() {
-			return NameNode{name}
+			namedNode.identifier += name + ","
 		}
 	}
+	if namedNode.identifier != "" {
+		namedNode.identifier = namedNode.identifier[:len(namedNode.identifier)-1]
+		return namedNode
+	}
+
 	return eval
 }
 

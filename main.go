@@ -13,6 +13,7 @@ import (
 
 // TODO: fix beta reductions: for example ":s FLIP T" evaluates to T due to variable capture
 var evaluator *interpreter.Evaluator
+var filepaths []string
 
 func main() {
 
@@ -21,7 +22,7 @@ func main() {
 
 	evaluator = interpreter.NewEvaluator()
 
-	filepaths := flag.Args()
+	filepaths = flag.Args()
 	loadFiles(filepaths)
 
 	// REPL
@@ -36,28 +37,35 @@ func main() {
 			return
 		}
 
-		// special shell commands
-		if input[0] == ':' {
-			switch input[1] {
-			case 'l': // load file
-				if len(input) > 3 {
-					filepaths = append(filepaths, strings.Fields(input)...)
-					loadFiles(filepaths)
-				} else {
-					fmt.Println("at least one filepath must be given")
-				}
-			case 'r': // reload file
+		execute(input)
+	}
+}
+
+func execute(input string) {
+	if len(input) == 0 {
+		return
+	}
+	// special shell commands
+	if input[0] == ':' {
+		switch input[1] {
+		case 'l': // load file
+			if len(input) > 3 {
+				filepaths = append(filepaths, strings.Fields(input)...)
 				loadFiles(filepaths)
-			case 'e': // exit
-				return
-			case 's': // show all the steps
-				fmt.Println(interpret(input[2:], true))
-			default:
-				fmt.Println("unrecognized command")
+			} else {
+				fmt.Println("at least one filepath must be given")
 			}
-		} else {
-			fmt.Println(interpret(input, false))
+		case 'r': // reload file
+			loadFiles(filepaths)
+		case 'e': // exit
+			return
+		case 's': // show all the steps
+			fmt.Println(interpret(input[2:], true))
+		default:
+			fmt.Println("unrecognized command")
 		}
+	} else {
+		fmt.Println(interpret(input, false))
 	}
 }
 
@@ -70,7 +78,7 @@ func loadFiles(filepaths []string) {
 		}
 
 		reader := bufio.NewReader(f)
-		fmt.Printf("Loading file: %s...\n", filepath)
+		fmt.Printf("---------- Loading file: %s... ----------\n", filepath)
 
 		for {
 			input, err := reader.ReadString('\n')
@@ -83,14 +91,14 @@ func loadFiles(filepaths []string) {
 			if err == io.EOF {
 				fmt.Println()
 			}
-			fmt.Println(interpret(input, false))
+			execute(input)
 
 			if err == io.EOF {
 				break
 			}
 		}
 
-		fmt.Printf("Loaded file: %s\n", filepath)
+		fmt.Printf("---------- Loaded file: %s ----------\n", filepath)
 	}
 }
 
